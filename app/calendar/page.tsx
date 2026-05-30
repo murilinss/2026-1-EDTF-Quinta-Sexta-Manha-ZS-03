@@ -29,7 +29,7 @@ const months = [
 export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [showModal, setShowModal] = useState(false);
-  const [newEvent, setNewEvent] = useState({ name: "", date: "", type: "Prova" as const });
+  const [newEvent, setNewEvent] = useState<{ name: string; date: string; type: "Prova" | "Trabalho" }>({ name: "", date: "", type: "Prova" });
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
