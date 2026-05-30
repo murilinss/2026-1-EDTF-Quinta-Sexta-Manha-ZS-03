@@ -236,7 +236,7 @@ export default function CalendarPage() {
                 </label>
                 <select
                   value={newEvent.type}
-                  onChange={(e) => setNewEvent({ ...newEvent, type: e.target.value as "Prova" | "Trabalho" })}
+                  onChange={(e) => setNewEvent({ ...newEvent, type: e.target.value as Event["type"] })}
                   className="w-full rounded-lg border border-border bg-input px-4 py-3 text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
                 >
                   <option value="Prova">Prova</option>
