@@ -3,12 +3,15 @@
 import Link from "next/link";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { FileText, CreditCard, CheckCircle, Flame, Plus, Clock } from "lucide-react";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 const metrics = [
-  { label: "PDFs Estudados", value: "12", icon: FileText, color: "bg-primary" },
-  { label: "Flashcards Criados", value: "156", icon: CreditCard, color: "bg-accent" },
+  { label: "PDFs Estudados", value: "2", icon: FileText, color: "bg-primary" },
+  { label: "Flashcards Criados", value: "8", icon: CreditCard, color: "bg-accent" },
   { label: "Questões Acertadas", value: "89%", icon: CheckCircle, color: "bg-success" },
-  { label: "Dias de Estudo", value: "24", icon: Flame, color: "bg-warning" },
+  { label: "Dias de Estudo", value: "3", icon: Flame, color: "bg-warning" },
 ];
 
 const recentDocuments = [
@@ -25,6 +28,15 @@ const upcomingExams = [
 ];
 
 export default function DashboardPage() {
+  const router = useRouter();
+
+useEffect(() => {
+  supabase.auth.getUser().then(({ data }) => {
+    if (!data.user) {
+      router.push("/login");
+    }
+  });
+}, []);
   return (
     <DashboardLayout>
       <div className="mb-8 flex items-center justify-between">

@@ -240,7 +240,7 @@ export default function CalendarPage() {
                   className="w-full rounded-lg border border-border bg-input px-4 py-3 text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
                 >
                   <option value="Prova">Prova</option>
-                  <option value="Trabalho">Trabalho</option>
+                  <option value="Trabalho">Trabalho</option>s
                 </select>
               </div>
             </div>
