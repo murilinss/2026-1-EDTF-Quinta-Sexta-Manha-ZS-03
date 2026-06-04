@@ -54,7 +54,7 @@ export default function UploadPage() {
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const content = await page.getTextContent();
-        const pageText = content.items.map((item: { str?: string }) => item.str || "").join(" ");
+        const pageText = content.items.map((item) => ("str" in item ? item.str : "")).join(" ");
         fullText += pageText + "\n";
       }
 
