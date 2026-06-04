@@ -3,40 +3,81 @@
 import Link from "next/link";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { FileText, CreditCard, CheckCircle, Flame, Plus, Clock } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
-const metrics = [
-  { label: "PDFs Estudados", value: "2", icon: FileText, color: "bg-primary" },
-  { label: "Flashcards Criados", value: "8", icon: CreditCard, color: "bg-accent" },
-  { label: "Questões Acertadas", value: "89%", icon: CheckCircle, color: "bg-success" },
-  { label: "Dias de Estudo", value: "3", icon: Flame, color: "bg-warning" },
-];
+type Document = {
+  id: string;
+  name: string;
+  created_at: string;
+};
 
-const recentDocuments = [
-  { name: "Cálculo I - Derivadas", progress: 85, date: "Há 2 horas" },
-  { name: "Física - Mecânica Clássica", progress: 60, date: "Há 1 dia" },
-  { name: "Química Orgânica", progress: 45, date: "Há 2 dias" },
-  { name: "Biologia Celular", progress: 30, date: "Há 3 dias" },
-];
-
-const upcomingExams = [
-  { name: "Prova de Cálculo I", date: "15 Jun", type: "Prova" },
-  { name: "Entrega - Trabalho de Física", date: "18 Jun", type: "Trabalho" },
-  { name: "Prova de Química", date: "22 Jun", type: "Prova" },
-];
+type Event = {
+  id: string;
+  name: string;
+  date: string;
+  type: string;
+};
 
 export default function DashboardPage() {
   const router = useRouter();
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [events, setEvents] = useState<Event[]>([]);
+  const [pdfCount, setPdfCount] = useState(0);
+  const [flashcardCount, setFlashcardCount] = useState(0);
+  const [loading, setLoading] = useState(true);
 
-useEffect(() => {
-  supabase.auth.getUser().then(({ data }) => {
-    if (!data.user) {
-      router.push("/login");
-    }
-  });
-}, []);
+  useEffect(() => {
+    const loadData = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        router.push("/login");
+        return;
+      }
+
+      const [docsRes, flashRes, eventsRes] = await Promise.all([
+        supabase.from("documents").select("id, name, created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(4),
+        supabase.from("flashcards").select("id", { count: "exact" }).eq("user_id", user.id),
+        supabase.from("events").select("*").eq("user_id", user.id).order("date", { ascending: true }).limit(3),
+      ]);
+
+      if (docsRes.data) {
+        setDocuments(docsRes.data);
+        setPdfCount(docsRes.data.length);
+      }
+      if (flashRes.count !== null) setFlashcardCount(flashRes.count);
+      if (eventsRes.data) setEvents(eventsRes.data);
+      setLoading(false);
+    };
+
+    loadData();
+  }, [router]);
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diff = Math.floor((now.getTime() - date.getTime()) / 1000 / 60);
+    if (diff < 60) return `Há ${diff} minutos`;
+    if (diff < 1440) return `Há ${Math.floor(diff / 60)} horas`;
+    return `Há ${Math.floor(diff / 1440)} dias`;
+  };
+
+  const metrics = [
+    { label: "PDFs Estudados", value: pdfCount.toString(), icon: FileText, color: "bg-primary" },
+    { label: "Flashcards Criados", value: flashcardCount.toString(), icon: CreditCard, color: "bg-accent" },
+    { label: "Questões Acertadas", value: "—", icon: CheckCircle, color: "bg-success" },
+    { label: "Dias de Estudo", value: "—", icon: Flame, color: "bg-warning" },
+  ];
+
+  if (loading) return (
+    <DashboardLayout>
+      <div className="flex h-64 items-center justify-center">
+        <p className="text-muted-foreground">Carregando...</p>
+      </div>
+    </DashboardLayout>
+  );
+
   return (
     <DashboardLayout>
       <div className="mb-8 flex items-center justify-between">
@@ -55,10 +96,7 @@ useEffect(() => {
 
       <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {metrics.map((metric) => (
-          <div
-            key={metric.label}
-            className="rounded-xl bg-card p-5"
-          >
+          <div key={metric.label} className="rounded-xl bg-card p-5">
             <div className="mb-3 flex items-center gap-3">
               <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${metric.color}`}>
                 <metric.icon className="h-5 w-5 text-white" />
@@ -74,59 +112,52 @@ useEffect(() => {
         <div className="lg:col-span-2">
           <div className="rounded-xl bg-card p-6">
             <h2 className="mb-4 text-lg font-semibold text-foreground">Documentos Recentes</h2>
-            <div className="space-y-4">
-              {recentDocuments.map((doc) => (
-                <div
-                  key={doc.name}
-                  className="flex items-center justify-between rounded-lg bg-muted/50 p-4"
-                >
-                  <div className="flex-1">
-                    <div className="mb-1 flex items-center justify-between">
-                      <h3 className="font-medium text-foreground">{doc.name}</h3>
-                      <span className="text-sm text-muted-foreground">{doc.progress}%</span>
-                    </div>
-                    <div className="mb-2 h-2 overflow-hidden rounded-full bg-secondary">
-                      <div
-                        className="h-full rounded-full bg-primary transition-all"
-                        style={{ width: `${doc.progress}%` }}
-                      />
-                    </div>
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <Clock className="h-3 w-3" />
-                      {doc.date}
+            {documents.length === 0 ? (
+              <div className="flex h-32 items-center justify-center text-center">
+                <p className="text-muted-foreground">Nenhum documento ainda. <Link href="/upload" className="text-primary hover:underline">Faça upload de um PDF</Link>.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {documents.map((doc) => (
+                  <div key={doc.id} className="flex items-center justify-between rounded-lg bg-muted/50 p-4">
+                    <div className="flex-1">
+                      <div className="mb-2 flex items-center justify-between">
+                        <h3 className="font-medium text-foreground">{doc.name}</h3>
+                      </div>
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Clock className="h-3 w-3" />
+                        {formatDate(doc.created_at)}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
         <div>
           <div className="rounded-xl bg-card p-6">
             <h2 className="mb-4 text-lg font-semibold text-foreground">Próximos Eventos</h2>
-            <div className="space-y-3">
-              {upcomingExams.map((exam) => (
-                <div
-                  key={exam.name}
-                  className="rounded-lg border border-border p-4"
-                >
-                  <h3 className="mb-1 font-medium text-foreground">{exam.name}</h3>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">{exam.date}</span>
-                    <span
-                      className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                        exam.type === "Prova"
-                          ? "bg-destructive/10 text-destructive"
-                          : "bg-accent/10 text-accent"
-                      }`}
-                    >
-                      {exam.type}
-                    </span>
+            {events.length === 0 ? (
+              <div className="flex h-32 items-center justify-center text-center">
+                <p className="text-muted-foreground text-sm">Nenhum evento cadastrado.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {events.map((event) => (
+                  <div key={event.id} className="rounded-lg border border-border p-4">
+                    <h3 className="mb-1 font-medium text-foreground">{event.name}</h3>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">{event.date}</span>
+                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${event.type === "Prova" ? "bg-destructive/10 text-destructive" : "bg-accent/10 text-accent"}`}>
+                        {event.type}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
