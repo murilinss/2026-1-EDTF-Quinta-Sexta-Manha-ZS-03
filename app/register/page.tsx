@@ -10,6 +10,8 @@ export default function RegisterPage() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -18,34 +20,37 @@ export default function RegisterPage() {
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
+    e.preventDefault();
+    setError("");
 
-  if (formData.password !== formData.confirmPassword) {
-    alert("As senhas não coincidem");
-    return;
-  }
+    if (formData.password !== formData.confirmPassword) {
+      setError("As senhas não coincidem.");
+      return;
+    }
 
-  const { data, error } = await supabase.auth.signUp({
-    email: formData.email,
-    password: formData.password,
-    options: {
-      data: {
-        name: formData.name,
-      },
-    },
-  });
+    if (formData.password.length < 6) {
+      setError("A senha deve ter pelo menos 6 caracteres.");
+      return;
+    }
 
-  console.log("DATA:", data);
-  console.log("ERROR:", error);
+    setLoading(true);
 
-  if (error) {
-    alert(error.message);
-    return;
-  }
+    const { error } = await supabase.auth.signUp({
+      email: formData.email,
+      password: formData.password,
+      options: {
+        data: { name: formData.name }
+      }
+    });
 
-  alert("Conta criada com sucesso!");
-  router.push("/dashboard");
-};
+    if (error) {
+      setError("Erro ao criar conta. Tente novamente.");
+      setLoading(false);
+      return;
+    }
+
+    router.push("/dashboard");
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -118,7 +123,7 @@ export default function RegisterPage() {
                   type={showPassword ? "text" : "password"}
                   value={formData.password}
                   onChange={handleChange}
-                  placeholder="Crie uma senha"
+                  placeholder="Mínimo 6 caracteres"
                   className="w-full rounded-lg border border-border bg-input py-3 pl-10 pr-12 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
                   required
                 />
@@ -158,11 +163,16 @@ export default function RegisterPage() {
               </div>
             </div>
 
+            {error && (
+              <p className="text-sm text-red-500">{error}</p>
+            )}
+
             <button
               type="submit"
-              className="w-full rounded-lg bg-primary py-3 font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+              disabled={loading}
+              className="w-full rounded-lg bg-primary py-3 font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
             >
-              Criar conta
+              {loading ? "Criando conta..." : "Criar conta"}
             </button>
           </form>
 

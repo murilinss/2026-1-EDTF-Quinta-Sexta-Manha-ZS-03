@@ -4,6 +4,8 @@ import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { Upload, FileText, Sparkles, CreditCard, X } from "lucide-react";
+import { gerarResumo, gerarFlashcards } from "@/lib/gemini";
+import { supabase } from "@/lib/supabase";
 
 export default function UploadPage() {
   const router = useRouter();
@@ -11,6 +13,7 @@ export default function UploadPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [summary, setSummary] = useState<string | null>(null);
+  const [docId, setDocId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -18,57 +21,96 @@ export default function UploadPage() {
     setIsDragging(true);
   };
 
-  const handleDragLeave = () => {
-    setIsDragging(false);
-  };
+  const handleDragLeave = () => setIsDragging(false);
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
     const droppedFile = e.dataTransfer.files[0];
-    if (droppedFile?.type === "application/pdf") {
-      setFile(droppedFile);
-    }
+    if (droppedFile?.type === "application/pdf") setFile(droppedFile);
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
-      setFile(selectedFile);
+    if (selectedFile) setFile(selectedFile);
+  };
+
+  const handleGenerateSummary = async () => {
+    if (!file) return;
+    setIsProcessing(true);
+    setSummary(null);
+
+    try {
+      const pdfjsLib = await import("pdfjs-dist");
+     pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  "pdfjs-dist/build/pdf.worker.min.mjs",
+  import.meta.url
+).toString();
+
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+      let fullText = "";
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        const pageText = content.items.map((item: { str?: string }) => item.str || "").join(" ");
+        fullText += pageText + "\n";
+      }
+
+      const resumo = await gerarResumo(fullText);
+      setSummary(resumo);
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase.from("documents").insert({
+          user_id: user.id,
+          name: file.name,
+          summary: resumo,
+        }).select().single();
+        if (data) setDocId(data.id);
+      }
+
+    } catch (err) {
+      console.error(err);
+      setSummary("Erro ao gerar resumo. Tente novamente.");
+    } finally {
+      setIsProcessing(false);
     }
   };
 
-  const handleGenerateSummary = () => {
+  const handleCreateFlashcards = async () => {
+    if (!file || !summary) return;
     setIsProcessing(true);
-    setTimeout(() => {
-      setSummary(`# Resumo: ${file?.name}
 
-## Principais Conceitos
+    try {
+      const flashcards = await gerarFlashcards(summary);
 
-1. **Introdução ao Tema**
-   O documento apresenta os conceitos fundamentais sobre o assunto, estabelecendo uma base teórica sólida para compreensão.
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user && docId) {
+        await supabase.from("flashcards").insert(
+          flashcards.map(f => ({
+            user_id: user.id,
+            document_id: docId,
+            question: f.question,
+            answer: f.answer,
+          }))
+        );
+      }
 
-2. **Desenvolvimento Teórico**
-   São exploradas as principais teorias e frameworks relacionados, com exemplos práticos de aplicação.
-
-3. **Metodologia**
-   Descrição detalhada dos métodos utilizados para análise e validação dos conceitos apresentados.
-
-4. **Resultados e Discussão**
-   Apresentação dos principais achados e sua relevância para o campo de estudo.
-
-5. **Conclusões**
-   Síntese das principais contribuições e sugestões para estudos futuros.`);
+      router.push("/flashcards-ia");
+    } catch (err) {
+      console.error(err);
+    } finally {
       setIsProcessing(false);
-    }, 2000);
+    }
   };
 
   const handleRemoveFile = () => {
     setFile(null);
     setSummary(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
+    setDocId(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   return (
@@ -87,9 +129,7 @@ export default function UploadPage() {
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
             className={`flex min-h-[300px] flex-col items-center justify-center rounded-xl border-2 border-dashed bg-card p-8 transition-colors ${
-              isDragging
-                ? "border-primary bg-primary/5"
-                : "border-border hover:border-primary/50"
+              isDragging ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
             }`}
           >
             {file ? (
@@ -114,12 +154,8 @@ export default function UploadPage() {
                 <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-xl bg-muted">
                   <Upload className="h-8 w-8 text-muted-foreground" />
                 </div>
-                <p className="mb-2 text-lg font-medium text-foreground">
-                  Arraste seu PDF aqui
-                </p>
-                <p className="mb-4 text-sm text-muted-foreground">
-                  ou clique para selecionar um arquivo
-                </p>
+                <p className="mb-2 text-lg font-medium text-foreground">Arraste seu PDF aqui</p>
+                <p className="mb-4 text-sm text-muted-foreground">ou clique para selecionar</p>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -148,12 +184,12 @@ export default function UploadPage() {
               {isProcessing ? "Gerando..." : "Gerar Resumo com IA"}
             </button>
             <button
-              onClick={() => router.push("/flashcards-ia")}
-              disabled={!file}
+              onClick={handleCreateFlashcards}
+              disabled={!summary || isProcessing}
               className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 py-3 font-medium text-foreground transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
             >
               <CreditCard className="h-5 w-5" />
-              Criar Flashcards
+              {isProcessing ? "Criando..." : "Criar Flashcards"}
             </button>
           </div>
         </div>
@@ -163,47 +199,10 @@ export default function UploadPage() {
             <Sparkles className="h-5 w-5 text-primary" />
             <h2 className="text-lg font-semibold text-foreground">Resumo IA</h2>
           </div>
-          
+
           {summary ? (
-            <div className="prose prose-invert max-w-none">
-              <div className="space-y-4 text-sm text-foreground">
-                {summary.split("\n").map((line, index) => {
-                  if (line.startsWith("# ")) {
-                    return (
-                      <h3 key={index} className="text-xl font-bold text-foreground">
-                        {line.replace("# ", "")}
-                      </h3>
-                    );
-                  }
-                  if (line.startsWith("## ")) {
-                    return (
-                      <h4 key={index} className="mt-6 text-lg font-semibold text-primary">
-                        {line.replace("## ", "")}
-                      </h4>
-                    );
-                  }
-                  if (line.match(/^\d+\./)) {
-                    const content = line.replace(/^\d+\.\s*/, "");
-                    const boldMatch = content.match(/\*\*(.*?)\*\*/);
-                    if (boldMatch) {
-                      return (
-                        <div key={index} className="mt-4">
-                          <p className="font-semibold text-foreground">{boldMatch[1]}</p>
-                        </div>
-                      );
-                    }
-                    return <p key={index}>{content}</p>;
-                  }
-                  if (line.trim() && !line.startsWith("**")) {
-                    return (
-                      <p key={index} className="text-muted-foreground leading-relaxed">
-                        {line.trim()}
-                      </p>
-                    );
-                  }
-                  return null;
-                })}
-              </div>
+            <div className="whitespace-pre-wrap text-sm text-foreground leading-relaxed">
+              {summary}
             </div>
           ) : (
             <div className="flex h-64 flex-col items-center justify-center text-center">
