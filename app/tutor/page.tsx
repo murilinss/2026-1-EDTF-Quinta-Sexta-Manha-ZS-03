@@ -3,6 +3,13 @@
 import { useState, useRef, useEffect } from "react";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { Send, Bot, User, FileText } from "lucide-react";
+import { supabase } from "@/lib/supabase";
+import Groq from "groq-sdk";
+
+const groq = new Groq({
+  apiKey: process.env.NEXT_PUBLIC_GROQ_API_KEY,
+  dangerouslyAllowBrowser: true,
+});
 
 interface Message {
   id: number;
@@ -11,37 +18,55 @@ interface Message {
   timestamp: string;
 }
 
-const initialMessages: Message[] = [
-  {
-    id: 1,
-    role: "assistant",
-    content: "Olá! Sou seu Tutor IA. Estou aqui para ajudá-lo a entender melhor o conteúdo do seu PDF sobre Cálculo I - Derivadas. Pode me fazer qualquer pergunta!",
-    timestamp: "10:30",
-  },
-];
-
-const mockResponses = [
-  "Excelente pergunta! A derivada de uma função f(x) representa a taxa de variação instantânea dessa função em um determinado ponto. Geometricamente, ela nos dá a inclinação da reta tangente à curva no ponto considerado. Por exemplo, se f(x) = x², então f'(x) = 2x, o que significa que a taxa de variação da função no ponto x=3 é 6.",
-  "Para calcular a derivada de uma função composta, utilizamos a regra da cadeia. Se temos y = f(g(x)), então dy/dx = f'(g(x)) · g'(x). É como se estivéssemos 'descascando' a função de fora para dentro, multiplicando as derivadas de cada camada.",
-  "As aplicações práticas das derivadas são muito amplas! Elas são usadas para: encontrar máximos e mínimos de funções (otimização), calcular velocidade e aceleração em física, determinar taxas de variação em economia, e muito mais. É uma ferramenta fundamental em diversas áreas do conhecimento.",
-];
-
 export default function TutorPage() {
-  const [messages, setMessages] = useState<Message[]>(initialMessages);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [docName, setDocName] = useState<string | null>(null);
+  const [docSummary, setDocSummary] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  useEffect(() => {
+    const loadDoc = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data } = await supabase
+        .from("documents")
+        .select("name, summary")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+
+      if (data) {
+        setDocName(data.name);
+        setDocSummary(data.summary);
+        setMessages([{
+          id: 1,
+          role: "assistant",
+          content: `Olá! Sou seu Tutor IA. Estou aqui para ajudá-lo a entender o conteúdo de **${data.name}**. Pode me fazer qualquer pergunta sobre o material!`,
+          timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+        }]);
+      } else {
+        setMessages([{
+          id: 1,
+          role: "assistant",
+          content: "Olá! Sou seu Tutor IA. Faça upload de um PDF primeiro para que eu possa ajudá-lo com o conteúdo.",
+          timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+        }]);
+      }
+    };
+
+    loadDoc();
+  }, []);
 
   useEffect(() => {
-    scrollToBottom();
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleSend = () => {
-    if (!input.trim()) return;
+  const handleSend = async () => {
+    if (!input.trim() || isTyping) return;
 
     const userMessage: Message = {
       id: messages.length + 1,
@@ -54,17 +79,38 @@ export default function TutorPage() {
     setInput("");
     setIsTyping(true);
 
-    setTimeout(() => {
-      const randomResponse = mockResponses[Math.floor(Math.random() * mockResponses.length)];
+    try {
+      const systemPrompt = docSummary
+        ? `Você é um tutor universitário brasileiro. Responda APENAS com base no seguinte conteúdo do documento "${docName}":\n\n${docSummary}\n\nSe a pergunta não estiver relacionada ao conteúdo, diga que só pode responder sobre o material enviado.`
+        : "Você é um tutor universitário brasileiro. Ajude o aluno com suas dúvidas acadêmicas.";
+
+      const response = await groq.chat.completions.create({
+        model: "llama-3.3-70b-versatile",
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...messages.map(m => ({ role: m.role, content: m.content })),
+          { role: "user", content: input },
+        ],
+      });
+
       const assistantMessage: Message = {
         id: messages.length + 2,
         role: "assistant",
-        content: randomResponse,
+        content: response.choices[0].message.content || "Não consegui responder.",
         timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
       };
+
       setMessages((prev) => [...prev, assistantMessage]);
+    } catch {
+      setMessages((prev) => [...prev, {
+        id: messages.length + 2,
+        role: "assistant",
+        content: "Erro ao processar sua pergunta. Tente novamente.",
+        timestamp: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+      }]);
+    } finally {
       setIsTyping(false);
-    }, 1500);
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -82,7 +128,7 @@ export default function TutorPage() {
             <h1 className="text-2xl font-bold text-foreground">Tutor IA</h1>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <FileText className="h-4 w-4" />
-              <span>Baseado em: Cálculo I - Derivadas.pdf</span>
+              <span>{docName ? `Baseado em: ${docName}` : "Nenhum documento carregado"}</span>
             </div>
           </div>
         </div>
@@ -91,41 +137,16 @@ export default function TutorPage() {
           <div className="flex-1 overflow-y-auto p-4">
             <div className="space-y-4">
               {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
-                >
-                  <div
-                    className={`flex max-w-[80%] gap-3 ${
-                      message.role === "user" ? "flex-row-reverse" : "flex-row"
-                    }`}
-                  >
-                    <div
-                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-                        message.role === "user" ? "bg-primary" : "bg-muted"
-                      }`}
-                    >
-                      {message.role === "user" ? (
-                        <User className="h-4 w-4 text-primary-foreground" />
-                      ) : (
-                        <Bot className="h-4 w-4 text-foreground" />
-                      )}
+                <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
+                  <div className={`flex max-w-[80%] gap-3 ${message.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
+                    <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${message.role === "user" ? "bg-primary" : "bg-muted"}`}>
+                      {message.role === "user" ? <User className="h-4 w-4 text-primary-foreground" /> : <Bot className="h-4 w-4 text-foreground" />}
                     </div>
                     <div>
-                      <div
-                        className={`rounded-2xl px-4 py-3 ${
-                          message.role === "user"
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-muted text-foreground"
-                        }`}
-                      >
+                      <div className={`rounded-2xl px-4 py-3 ${message.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"}`}>
                         <p className="text-sm leading-relaxed">{message.content}</p>
                       </div>
-                      <span
-                        className={`mt-1 block text-xs text-muted-foreground ${
-                          message.role === "user" ? "text-right" : "text-left"
-                        }`}
-                      >
+                      <span className={`mt-1 block text-xs text-muted-foreground ${message.role === "user" ? "text-right" : "text-left"}`}>
                         {message.timestamp}
                       </span>
                     </div>
