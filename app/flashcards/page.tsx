@@ -1,96 +1,112 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/dashboard-layout";
-import { CreditCard, Plus, ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
+import { CreditCard, ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
-const mockFlashcards = [
-  {
-    id: 1,
-    front: "O que é derivada em cálculo?",
-    back: "A derivada é a taxa de variação instantânea de uma função em relação a uma variável. Geometricamente, representa a inclinação da reta tangente à curva em um ponto.",
-    deck: "Cálculo I",
-  },
-  {
-    id: 2,
-    front: "Qual é a fórmula da segunda lei de Newton?",
-    back: "F = m × a, onde F é a força resultante, m é a massa do objeto e a é a aceleração.",
-    deck: "Física",
-  },
-  {
-    id: 3,
-    front: "O que é uma ligação covalente?",
-    back: "É uma ligação química onde dois átomos compartilham um ou mais pares de elétrons para atingir estabilidade.",
-    deck: "Química",
-  },
-  {
-    id: 4,
-    front: "O que é mitocôndria?",
-    back: "É uma organela celular responsável pela produção de energia (ATP) através da respiração celular.",
-    deck: "Biologia",
-  },
-];
+type Flashcard = {
+  id: string;
+  question: string;
+  answer: string;
+};
 
 export default function FlashcardsPage() {
+  const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const currentCard = mockFlashcards[currentIndex];
+  useEffect(() => {
+    const loadFlashcards = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data } = await supabase
+        .from("flashcards")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(20);
+
+      if (data && data.length > 0) setFlashcards(data);
+      setLoading(false);
+    };
+
+    loadFlashcards();
+  }, []);
+
+  const currentCard = flashcards[currentIndex];
 
   const handleNext = () => {
     setIsFlipped(false);
-    setCurrentIndex((prev) => (prev + 1) % mockFlashcards.length);
+    setTimeout(() => setCurrentIndex((prev) => (prev + 1) % flashcards.length), 100);
   };
 
   const handlePrevious = () => {
     setIsFlipped(false);
-    setCurrentIndex((prev) => (prev - 1 + mockFlashcards.length) % mockFlashcards.length);
+    setTimeout(() => setCurrentIndex((prev) => (prev - 1 + flashcards.length) % flashcards.length), 100);
   };
 
-  const handleFlip = () => {
-    setIsFlipped(!isFlipped);
-  };
+  const handleFlip = () => setIsFlipped(!isFlipped);
+
+  if (loading) return (
+    <DashboardLayout>
+      <div className="flex h-64 items-center justify-center">
+        <p className="text-muted-foreground">Carregando flashcards...</p>
+      </div>
+    </DashboardLayout>
+  );
+
+  if (flashcards.length === 0) return (
+    <DashboardLayout>
+      <div className="flex h-64 flex-col items-center justify-center text-center">
+        <p className="mb-2 text-lg font-medium text-foreground">Nenhum flashcard ainda</p>
+        <p className="text-muted-foreground">Faça upload de um PDF e clique em "Criar Flashcards".</p>
+      </div>
+    </DashboardLayout>
+  );
 
   return (
     <DashboardLayout>
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Flashcards</h1>
-          <p className="text-muted-foreground">Revise seus flashcards e memorize conceitos.</p>
-        </div>
-        <button className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 font-medium text-primary-foreground transition-colors hover:bg-primary/90">
-          <Plus className="h-5 w-5" />
-          Novo Flashcard
-        </button>
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold text-foreground">Flashcards</h1>
+        <p className="text-muted-foreground">Revise seus conceitos de forma interativa.</p>
       </div>
 
       <div className="mx-auto max-w-2xl">
         <div className="mb-4 flex items-center justify-between">
-          <span className="rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
-            {currentCard.deck}
-          </span>
+          <span className="text-sm text-muted-foreground">Progresso</span>
           <span className="text-sm text-muted-foreground">
-            Card {currentIndex + 1} de {mockFlashcards.length}
+            Card {currentIndex + 1} de {flashcards.length}
           </span>
         </div>
 
         <div className="mb-4 h-2 overflow-hidden rounded-full bg-secondary">
           <div
             className="h-full bg-primary transition-all"
-            style={{ width: `${((currentIndex + 1) / mockFlashcards.length) * 100}%` }}
+            style={{ width: `${((currentIndex + 1) / flashcards.length) * 100}%` }}
           />
         </div>
 
         <div
           onClick={handleFlip}
-          className="group relative mb-6 min-h-[300px] cursor-pointer perspective-1000"
+          className="group relative mb-6 min-h-[300px] cursor-pointer"
+          style={{ perspective: "1000px" }}
         >
           <div
-            className={`relative h-full min-h-[300px] w-full rounded-2xl transition-transform duration-500 transform-style-3d ${
-              isFlipped ? "rotate-y-180" : ""
-            }`}
+            style={{
+              transformStyle: "preserve-3d",
+              transition: "transform 0.5s",
+              transform: isFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
+              position: "relative",
+              minHeight: "300px",
+            }}
           >
-            <div className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl bg-card p-8 backface-hidden">
+            <div
+              style={{ backfaceVisibility: "hidden" }}
+              className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl bg-card p-8"
+            >
               <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
                 <CreditCard className="h-6 w-6 text-primary" />
               </div>
@@ -98,17 +114,20 @@ export default function FlashcardsPage() {
                 Pergunta
               </span>
               <p className="text-center text-xl font-medium text-foreground">
-                {currentCard.front}
+                {currentCard.question}
               </p>
               <p className="mt-6 text-sm text-muted-foreground">Clique para ver a resposta</p>
             </div>
 
-            <div className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl bg-card p-8 rotate-y-180 backface-hidden">
-              <span className="mb-4 text-xs font-semibold uppercase tracking-wider text-success">
+            <div
+              style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}
+              className="absolute inset-0 flex flex-col items-center justify-center rounded-2xl bg-card p-8"
+            >
+              <span className="mb-4 text-xs font-semibold uppercase tracking-wider text-green-500">
                 Resposta
               </span>
               <p className="text-center text-lg leading-relaxed text-foreground">
-                {currentCard.back}
+                {currentCard.answer}
               </p>
             </div>
           </div>
@@ -122,10 +141,7 @@ export default function FlashcardsPage() {
             <ChevronLeft className="h-6 w-6" />
           </button>
           <button
-            onClick={() => {
-              setIsFlipped(false);
-              setCurrentIndex(0);
-            }}
+            onClick={() => { setIsFlipped(false); setCurrentIndex(0); }}
             className="flex h-12 w-12 items-center justify-center rounded-full border border-border bg-card text-foreground transition-colors hover:bg-secondary"
           >
             <RotateCcw className="h-5 w-5" />
@@ -138,21 +154,6 @@ export default function FlashcardsPage() {
           </button>
         </div>
       </div>
-
-      <style jsx>{`
-        .perspective-1000 {
-          perspective: 1000px;
-        }
-        .transform-style-3d {
-          transform-style: preserve-3d;
-        }
-        .backface-hidden {
-          backface-visibility: hidden;
-        }
-        .rotate-y-180 {
-          transform: rotateY(180deg);
-        }
-      `}</style>
     </DashboardLayout>
   );
 }
