@@ -36,16 +36,15 @@ export default function DashboardPage() {
         return;
       }
 
-      const [docsRes, flashRes, eventsRes] = await Promise.all([
+      const [docsRes, docsCountRes, flashRes, eventsRes] = await Promise.all([
         supabase.from("documents").select("id, name, created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(4),
-        supabase.from("flashcards").select("id", { count: "exact" }).eq("user_id", user.id),
+        supabase.from("documents").select("id", { count: "exact", head: true }).eq("user_id", user.id),
+        supabase.from("flashcards").select("id", { count: "exact", head: true }).eq("user_id", user.id),
         supabase.from("events").select("*").eq("user_id", user.id).order("date", { ascending: true }).limit(3),
       ]);
 
-      if (docsRes.data) {
-        setDocuments(docsRes.data);
-        setPdfCount(docsRes.data.length);
-      }
+      if (docsRes.data) setDocuments(docsRes.data);
+      if (docsCountRes.count !== null) setPdfCount(docsCountRes.count);
       if (flashRes.count !== null) setFlashcardCount(flashRes.count);
       if (eventsRes.data) setEvents(eventsRes.data);
       setLoading(false);
@@ -58,9 +57,10 @@ export default function DashboardPage() {
     const date = new Date(dateStr);
     const now = new Date();
     const diff = Math.floor((now.getTime() - date.getTime()) / 1000 / 60);
-    if (diff < 60) return `Há ${diff} minutos`;
-    if (diff < 1440) return `Há ${Math.floor(diff / 60)} horas`;
-    return `Há ${Math.floor(diff / 1440)} dias`;
+    if (diff < 1) return "Agora mesmo";
+    if (diff < 60) return `Há ${diff} minuto${diff > 1 ? "s" : ""}`;
+    if (diff < 1440) return `Há ${Math.floor(diff / 60)} hora${Math.floor(diff / 60) > 1 ? "s" : ""}`;
+    return `Há ${Math.floor(diff / 1440)} dia${Math.floor(diff / 1440) > 1 ? "s" : ""}`;
   };
 
   const metrics = [
