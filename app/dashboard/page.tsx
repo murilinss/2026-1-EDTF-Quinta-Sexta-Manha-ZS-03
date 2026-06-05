@@ -54,7 +54,7 @@ export default function DashboardPage() {
   }, [router]);
 
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
+    const date = new Date(dateStr + "Z");
     const now = new Date();
     const diff = Math.floor((now.getTime() - date.getTime()) / 1000 / 60);
     if (diff < 1) return "Agora mesmo";
