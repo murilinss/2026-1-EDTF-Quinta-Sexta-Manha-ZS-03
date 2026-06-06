@@ -2,16 +2,15 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { GraduationCap, Mail, Lock, Eye, EyeOff, User } from "lucide-react";
+import { GraduationCap, Mail, Lock, Eye, EyeOff, User, CheckCircle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 export default function RegisterPage() {
-  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -49,12 +48,50 @@ export default function RegisterPage() {
       return;
     }
 
-    router.push("/dashboard");
+    setEmailSent(true);
+    setLoading(false);
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
+
+  if (emailSent) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4 py-8">
+        <div className="w-full max-w-md">
+          <div className="mb-8 text-center">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary">
+              <GraduationCap className="h-9 w-9 text-primary-foreground" />
+            </div>
+            <h1 className="mb-2 text-3xl font-bold text-foreground">EstudaAI</h1>
+          </div>
+
+          <div className="rounded-2xl bg-card p-8 text-center">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-500/10">
+              <CheckCircle className="h-8 w-8 text-green-500" />
+            </div>
+            <h2 className="mb-3 text-xl font-semibold text-foreground">
+              Verifique seu email
+            </h2>
+            <p className="mb-2 text-muted-foreground">
+              Enviamos um link de confirmação para:
+            </p>
+            <p className="mb-6 font-medium text-foreground">{formData.email}</p>
+            <p className="mb-6 text-sm text-muted-foreground">
+              Clique no link enviado para ativar sua conta e acessar o EstudaAI.
+            </p>
+            <Link
+              href="/login"
+              className="inline-block w-full rounded-lg bg-primary py-3 font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+            >
+              Ir para o login
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4 py-8">
