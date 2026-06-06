@@ -27,18 +27,30 @@ export default function FlashcardsIAPage() {
   const [feedbackText, setFeedbackText] = useState("");
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [docName, setDocName] = useState<string | null>(null);
 
   useEffect(() => {
     const loadFlashcards = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      const { data: lastDoc } = await supabase
+        .from("documents")
+        .select("id, name")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+
+      if (!lastDoc) { setLoading(false); return; }
+      setDocName(lastDoc.name);
+
       const { data } = await supabase
         .from("flashcards")
         .select("*")
         .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(10);
+        .eq("document_id", lastDoc.id)
+        .order("created_at", { ascending: false });
 
       if (data && data.length > 0) setFlashcards(data);
       setLoading(false);
@@ -134,7 +146,7 @@ export default function FlashcardsIAPage() {
     <DashboardLayout>
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-foreground">Flashcards IA</h1>
-        <p className="text-muted-foreground">Responda às perguntas e receba avaliação inteligente da IA.</p>
+        <p className="text-sm text-muted-foreground">📄 {docName}</p>
       </div>
 
       <div className="mx-auto max-w-2xl">
