@@ -81,31 +81,32 @@ export default function UploadPage() {
 
   const handleCreateFlashcards = async () => {
     if (!file || !summary || !docId) return;
-    setIsProcessing(true);
+  setIsProcessing(true);
 
-    try {
-      const flashcards = await gerarFlashcards(summary);
+  try {
+    const flashcards = await gerarFlashcards(summary);
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user && docId) {
-        await supabase.from("flashcards").delete().eq("document_id", docId);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user && docId) {
+      // Deleta TODOS os flashcards do usuário antes de criar novos
+      await supabase.from("flashcards").delete().eq("user_id", user.id);
 
-        await supabase.from("flashcards").insert(
-          flashcards.map(f => ({
-            user_id: user.id,
-            document_id: docId,
-            question: f.question,
-            answer: f.answer,
-          }))
-        );
-      }
-
-      router.push("/flashcards-ia");
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsProcessing(false);
+      await supabase.from("flashcards").insert(
+        flashcards.map(f => ({
+          user_id: user.id,
+          document_id: docId,
+          question: f.question,
+          answer: f.answer,
+        }))
+      );
     }
+
+    router.push("/flashcards-ia");
+  } catch (err) {
+    console.error(err);
+  } finally {
+    setIsProcessing(false);
+  }
   };
 
   const handleRemoveFile = () => {
