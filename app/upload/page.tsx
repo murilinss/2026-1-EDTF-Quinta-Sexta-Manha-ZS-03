@@ -42,10 +42,10 @@ export default function UploadPage() {
 
     try {
       const pdfjsLib = await import("pdfjs-dist");
-     pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  "pdfjs-dist/build/pdf.worker.min.mjs",
-  import.meta.url
-).toString();
+      pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+        "pdfjs-dist/build/pdf.worker.min.mjs",
+        import.meta.url
+      ).toString();
 
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
@@ -80,7 +80,7 @@ export default function UploadPage() {
   };
 
   const handleCreateFlashcards = async () => {
-    if (!file || !summary) return;
+    if (!file || !summary || !docId) return;
     setIsProcessing(true);
 
     try {
@@ -88,6 +88,8 @@ export default function UploadPage() {
 
       const { data: { user } } = await supabase.auth.getUser();
       if (user && docId) {
+        await supabase.from("flashcards").delete().eq("document_id", docId);
+
         await supabase.from("flashcards").insert(
           flashcards.map(f => ({
             user_id: user.id,
