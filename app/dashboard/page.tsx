@@ -26,7 +26,10 @@ export default function DashboardPage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [pdfCount, setPdfCount] = useState(0);
   const [flashcardCount, setFlashcardCount] = useState(0);
+  const [userName, setUserName] = useState<string>("");
   const [loading, setLoading] = useState(true);
+
+  const todayStr = new Date().toISOString().split("T")[0];
 
   useEffect(() => {
     const loadData = async () => {
@@ -36,11 +39,14 @@ export default function DashboardPage() {
         return;
       }
 
+      const name = user.user_metadata?.name || user.email?.split("@")[0] || "Estudante";
+      setUserName(name);
+
       const [docsRes, docsCountRes, flashRes, eventsRes] = await Promise.all([
         supabase.from("documents").select("id, name, created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(4),
         supabase.from("documents").select("id", { count: "exact", head: true }).eq("user_id", user.id),
         supabase.from("flashcards").select("id", { count: "exact", head: true }).eq("user_id", user.id),
-        supabase.from("events").select("*").eq("user_id", user.id).order("date", { ascending: true }).limit(3),
+        supabase.from("events").select("*").eq("user_id", user.id).gte("date", todayStr).order("date", { ascending: true }).limit(3),
       ]);
 
       if (docsRes.data) setDocuments(docsRes.data);
@@ -63,6 +69,12 @@ export default function DashboardPage() {
     return `Há ${Math.floor(diff / 1440)} dia${Math.floor(diff / 1440) > 1 ? "s" : ""}`;
   };
 
+  const formatEventDate = (dateStr: string) => {
+    const date = new Date(dateStr + "T00:00:00");
+    const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+    return `${date.getDate()} ${months[date.getMonth()]}`;
+  };
+
   const metrics = [
     { label: "PDFs Estudados", value: pdfCount.toString(), icon: FileText, color: "bg-primary" },
     { label: "Flashcards Criados", value: flashcardCount.toString(), icon: CreditCard, color: "bg-accent" },
@@ -82,7 +94,7 @@ export default function DashboardPage() {
     <DashboardLayout>
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+          <h1 className="text-2xl font-bold text-foreground">Olá, {userName}! 👋</h1>
           <p className="text-muted-foreground">Bem-vindo de volta! Continue seus estudos.</p>
         </div>
         <Link
@@ -149,7 +161,7 @@ export default function DashboardPage() {
                   <div key={event.id} className="rounded-lg border border-border p-4">
                     <h3 className="mb-1 font-medium text-foreground">{event.name}</h3>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">{event.date}</span>
+                      <span className="text-sm text-muted-foreground">{formatEventDate(event.date)}</span>
                       <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${event.type === "Prova" ? "bg-destructive/10 text-destructive" : "bg-accent/10 text-accent"}`}>
                         {event.type}
                       </span>
