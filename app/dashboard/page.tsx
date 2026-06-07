@@ -94,7 +94,7 @@ export default function DashboardPage() {
     <DashboardLayout>
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Olá, {userName}! 👋</h1>
+          <h1 className="text-2xl font-bold text-foreground">Olá, {userName}! </h1>
           <p className="text-muted-foreground">Bem-vindo de volta! Continue seus estudos.</p>
         </div>
         <Link
