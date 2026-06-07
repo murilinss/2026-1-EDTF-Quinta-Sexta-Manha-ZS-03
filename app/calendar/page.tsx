@@ -32,6 +32,7 @@ export default function CalendarPage() {
   const firstDayOfMonth = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const today = new Date();
+  const todayStr = today.toISOString().split("T")[0];
 
   useEffect(() => {
     loadEvents();
@@ -88,7 +89,7 @@ export default function CalendarPage() {
   };
 
   const upcomingEvents = events
-    .filter(e => new Date(e.date + "T00:00:00") >= new Date(today.toDateString()))
+    .filter(e => e.date >= todayStr)
     .slice(0, 5);
 
   const renderCalendarDays = () => {
@@ -192,7 +193,7 @@ export default function CalendarPage() {
             <h2 className="mb-4 text-lg font-semibold text-foreground">Próximos Eventos</h2>
             {upcomingEvents.length === 0 ? (
               <div className="flex h-32 items-center justify-center text-center">
-                <p className="text-sm text-muted-foreground">Nenhum evento cadastrado.</p>
+                <p className="text-sm text-muted-foreground">Nenhum evento futuro cadastrado.</p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -250,6 +251,7 @@ export default function CalendarPage() {
                 <input
                   type="date"
                   value={newEvent.date}
+                  min={todayStr}
                   onChange={(e) => setNewEvent({ ...newEvent, date: e.target.value })}
                   className="w-full rounded-lg border border-border bg-input px-4 py-3 text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
                 />
